@@ -13,6 +13,12 @@ import SwiftUI                  // Used to define SF Symbols in "GridAsset" stru
 
 // enum namespace
 enum GRID_CONSTANTS{
+    // Board size decided 2026-11-05: 14x10 everywhere.
+    // 14 columns (x) by 10 rows (y), 140 cells per grid.
+    // Every grid, AI bound, MoveCodec bound check, and UI layout
+    // must read WIDTH / HEIGHT here — never hardcode 10x10.
+    static let WIDTH = 14
+    static let HEIGHT = 10
     static let MAX_NUMBER_OF_SHIPS = 7
     static let NOT_A_NUMBER = -1
     static let ONLY_2D = 0
@@ -29,8 +35,8 @@ enum GRID_CONSTANTS{
    - opponentGridState:
 */ 
 struct GridAsset {
-    var xAxislength = 14
-    var yAxislength = 10
+    var xAxislength = GRID_CONSTANTS.WIDTH
+    var yAxislength = GRID_CONSTANTS.HEIGHT
     
     // See Ship.swift for custom data type
     // "X" = Hit
