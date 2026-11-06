@@ -12,9 +12,28 @@ The three themes match the game's own theme language (space, sand, fire) from
 the Kickstarter script, where new themes unlock as you climb.
 
 Status: concept art, not final production sprites. The sheets show the whole
-fleet in one image per theme; individual per-ship sprites are the next step
-if a theme is chosen. Ship lengths in the art are illustrative — the GameState
-ship footprints (T/X/Y shapes) are still undefined and are NOT set by this art.
+fleet in one image per theme. Ember is sliced into individual sprites (below);
+Starlight and Sandstorm are still whole sheets only. Ship lengths in the art
+are illustrative — the GameState ship footprints (T/X/Y shapes) are still
+undefined and are NOT set by this art.
+
+## Ember sprites
+
+`Ember/` holds the Ember (fire) fleet sliced into individual transparent PNGs,
+smallest to largest, top to bottom of the sheet:
+
+- `ember-ship-01.png` 441x129
+- `ember-ship-02.png` 678x180
+- `ember-ship-03.png` 752x191
+- `ember-ship-04.png` 866x205
+- `ember-ship-05.png` 736x226
+- `ember-ship-06.png` 904x240
+- `ember-ship-07.png` 1096x255
+
+Black was converted to transparency with a smooth ramp, so the sprites
+composite directly over the starry backgrounds; engine flames are included
+in each sprite. Numbering is by size rank on the sheet, not by GameState ship
+length — the mapping to the 7 ship footprints is still TBD.
 
 To use in Xcode: drag a sheet into Assets.xcassets as an image set, or
 reference the PNGs as bundle resources. The project uses a synchronized folder
