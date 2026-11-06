@@ -27,7 +27,8 @@ enum AstroshipMessage: Codable, Equatable {
     /// Connectivity check. No game effect.
     case ping
     /// A shot at a grid cell. `x` is the column, `y` is the row,
-    /// both zero-based. Validated against GRID_CONSTANTS on decode.
+    /// `z` is the depth layer (0..<DEPTH), all zero-based.
+    /// Validated against GRID_CONSTANTS on decode.
     case shot(x: Int, y: Int, z: Int)
     /// The sender concedes the match.
     case surrender
@@ -38,7 +39,7 @@ enum AstroshipMessage: Codable, Equatable {
         case .ping:
             "ping"
         case let .shot(x, y, z):
-            "shot (\(x), \(y), \(z)"
+            "shot (\(x), \(y), \(z))"
         case .surrender:
             "surrender"
         }
@@ -73,10 +74,15 @@ enum MoveCodec {
             throw MoveCodecError.unsupportedVersion(envelope.version)
         }
 
-        if case let .shot(x, y) = envelope.message {
+        // Merge fix (2026-11-06): the z-axis commit changed shot to
+        // three coordinates but left this decode binding two — so `z`
+        // was undefined here — and checked DEPTH against `y` instead
+        // of `z`. Both are fixed: bind all three, validate z against
+        // DEPTH, and only then trust the shot.
+        if case let .shot(x, y, z) = envelope.message {
             guard (0..<GRID_CONSTANTS.WIDTH).contains(x),
                   (0..<GRID_CONSTANTS.HEIGHT).contains(y),
-                  (0..<GRID_CONSTANTS.DEPTH).contains(y) else {
+                  (0..<GRID_CONSTANTS.DEPTH).contains(z) else {
                 throw MoveCodecError.outOfBounds(x: x, y: y, z: z)
             }
         }
@@ -93,7 +99,7 @@ enum MoveCodec {
             case let .unsupportedVersion(version):
                 "Unsupported move version \(version) (expected \(MoveCodec.protocolVersion))."
             case let .outOfBounds(x, y, z):
-                "Shot (\(x), \(y), \(z) is outside the \(GRID_CONSTANTS.WIDTH)x\(GRID_CONSTANTS.HEIGHT)x\(GRID_CONSTANTS.DEPTH) board."
+                "Shot (\(x), \(y), \(z)) is outside the \(GRID_CONSTANTS.WIDTH)x\(GRID_CONSTANTS.HEIGHT)x\(GRID_CONSTANTS.DEPTH) board."
             }
         }
     }
