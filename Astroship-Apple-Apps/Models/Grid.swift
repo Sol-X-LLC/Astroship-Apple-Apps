@@ -19,6 +19,7 @@ enum GRID_CONSTANTS{
     // must read WIDTH / HEIGHT here — never hardcode 10x10.
     static let WIDTH = 14
     static let HEIGHT = 10
+    static let DEPTH = 4
     static let MAX_NUMBER_OF_SHIPS = 7
     static let NOT_A_NUMBER = -1
     static let ONLY_2D = 0
@@ -37,6 +38,7 @@ enum GRID_CONSTANTS{
 struct GridAsset {
     var xAxislength = GRID_CONSTANTS.WIDTH
     var yAxislength = GRID_CONSTANTS.HEIGHT
+    var zAxislength = GRID_CONSTANTS.DEPTH
     
     // See Ship.swift for custom data type
     // "X" = Hit

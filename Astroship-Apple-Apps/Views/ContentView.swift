@@ -43,8 +43,8 @@ struct ContentView: View {
                         .multilineTextAlignment(.center)
 
                     HStack {
-                        Button("Send test shot (7, 5)") {
-                            session.sendShot(x: 7, y: 5)
+                        Button("Send test shot (7, 5, 0)") {
+                            session.sendShot(x: 7, y: 5, z: 0)
                         }
                         .buttonStyle(.borderedProminent)
 

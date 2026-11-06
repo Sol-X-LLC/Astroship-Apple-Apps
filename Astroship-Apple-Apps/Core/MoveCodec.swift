@@ -28,7 +28,7 @@ enum AstroshipMessage: Codable, Equatable {
     case ping
     /// A shot at a grid cell. `x` is the column, `y` is the row,
     /// both zero-based. Validated against GRID_CONSTANTS on decode.
-    case shot(x: Int, y: Int)
+    case shot(x: Int, y: Int, z: Int)
     /// The sender concedes the match.
     case surrender
 
@@ -37,8 +37,8 @@ enum AstroshipMessage: Codable, Equatable {
         switch self {
         case .ping:
             "ping"
-        case let .shot(x, y):
-            "shot (\(x), \(y))"
+        case let .shot(x, y, z):
+            "shot (\(x), \(y), \(z)"
         case .surrender:
             "surrender"
         }
@@ -75,8 +75,9 @@ enum MoveCodec {
 
         if case let .shot(x, y) = envelope.message {
             guard (0..<GRID_CONSTANTS.WIDTH).contains(x),
-                  (0..<GRID_CONSTANTS.HEIGHT).contains(y) else {
-                throw MoveCodecError.outOfBounds(x: x, y: y)
+                  (0..<GRID_CONSTANTS.HEIGHT).contains(y),
+                  (0..<GRID_CONSTANTS.DEPTH).contains(y) else {
+                throw MoveCodecError.outOfBounds(x: x, y: y, z: z)
             }
         }
 
@@ -85,14 +86,14 @@ enum MoveCodec {
 
     enum MoveCodecError: Error, LocalizedError {
         case unsupportedVersion(Int)
-        case outOfBounds(x: Int, y: Int)
+        case outOfBounds(x: Int, y: Int, z:Int)
 
         var errorDescription: String? {
             switch self {
             case let .unsupportedVersion(version):
                 "Unsupported move version \(version) (expected \(MoveCodec.protocolVersion))."
-            case let .outOfBounds(x, y):
-                "Shot (\(x), \(y)) is outside the \(GRID_CONSTANTS.WIDTH)x\(GRID_CONSTANTS.HEIGHT) board."
+            case let .outOfBounds(x, y, z):
+                "Shot (\(x), \(y), \(z) is outside the \(GRID_CONSTANTS.WIDTH)x\(GRID_CONSTANTS.HEIGHT)x\(GRID_CONSTANTS.DEPTH) board."
             }
         }
     }

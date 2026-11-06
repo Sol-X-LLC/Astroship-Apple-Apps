@@ -60,8 +60,8 @@ final class GameSession: ObservableObject {
 
     /// Send a shot at a cell. Validates the cell locally
     /// before anything goes on the wire.
-    func sendShot(x: Int, y: Int) {
-        send(.shot(x: x, y: y))
+    func sendShot(x: Int, y: Int, z: Int) {
+        send(.shot(x: x, y: y, z: z))
     }
 
     /// Send a connectivity check. No game effect.
