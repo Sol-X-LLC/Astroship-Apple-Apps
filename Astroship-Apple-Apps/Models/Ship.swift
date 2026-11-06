@@ -41,19 +41,16 @@ enum SHIP_CONSTANTS{
    - gridLocation: Zero indexed location
    
 */ 
-struct ShipAsset {
+struct ShipAsset: Codable, Equatable {
     var shape = SHIP_CONSTANTS.PHYSICAL_SHAPE[0]
     var length = SHIP_CONSTANTS.MIN_SHIP_LENGTH
     var skin = SHIP_CONSTANTS.SKIN[0]
-    
-    // Future Work: 3D Grid
-    // Phase 0 fix: the old line referenced a `Grid` type that does
-    // not exist (`GridAsset` is the struct; `GRID_CONSTANTS` is a
-    // top-level enum) and a `MIN_VALUE` that was never defined.
-    // A ship's location is a plain [x, y, z] triple of Ints.
+
+    // A ship's location is a plain [x, y, z] triple of Ints —
+    // its origin cell, set by GameState when the ship is placed.
     // x = NOT_A_NUMBER (-1) means the ship is not placed yet;
-    // z = ONLY_2D (0) is the 2D plane. Phase 1 replaces this
-    // triple with a GridPoint value type, per the architecture doc.
+    // z = ONLY_2D (0) is the 2D plane. The ship's full footprint
+    // lives in PlacedShip.cells as [GridPoint] (Core/GameState.swift).
     var gridLocation = [
         GRID_CONSTANTS.NOT_A_NUMBER,
         GRID_CONSTANTS.MIN_VALUE,
