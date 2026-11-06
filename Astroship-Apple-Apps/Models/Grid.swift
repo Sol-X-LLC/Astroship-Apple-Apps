@@ -35,37 +35,26 @@ enum GRID_CONSTANTS{
    - myGridState: Live game play state of your own battle grid
    - opponentGridState: Live game play state of the opponents battle grid
 */
-struct GridAsset {
+struct GridAsset: Codable, Equatable {
     var xAxisLength = GRID_CONSTANTS.WIDTH
     var yAxisLength = GRID_CONSTANTS.HEIGHT
     var zAxisLength = GRID_CONSTANTS.DEPTH
-    
-    // Each grid state is a 3D array of cell strings:
-    // "F" = Fog of War, "X" = Hit, "O" = Miss, "S" = Ship not Hit, "R" = RADAR
-    // gridState[z][y][x] — z layer outermost, then row y, then column x — so a shot (x, y, z) reads gridState[z][y][x].
-    // Each layout is one ShipAsset per ship (7).
-    
-    // TODO Replace the String cells with CellState, per the architecture doc.
-    var myGridState = [[[String]]](
-        repeating: [[String]](
-            repeating: [String](repeating: "F", count: GRID_CONSTANTS.WIDTH),
-            count: GRID_CONSTANTS.HEIGHT
-        ),
-        count: GRID_CONSTANTS.DEPTH
-    )
+
+    // Each grid state is a 3D array of CellState (Core/CellState.swift):
+    // fog, ship, hit, miss, radar, empty — distinguished by shape +
+    // label, never by colour alone (INTE-001). gridState[z][y][x] —
+    // z layer outermost, then row y, then column x — so a shot
+    // (x, y, z) reads gridState[z][y][x]. Each layout is one
+    // ShipAsset per ship (7). GameState (Core/GameState.swift)
+    // owns the rules that change these cells.
+    var myGridState = CellState.freshGrid()
     
     // See Ship.swift for custom data type
     var myShipLayout = [ShipAsset](
         repeating: ShipAsset(),
         count: GRID_CONSTANTS.MAX_NUMBER_OF_SHIPS
     )
-    var opponentGridState = [[[String]]](
-        repeating: [[String]](
-            repeating: [String](repeating: "F", count: GRID_CONSTANTS.WIDTH),
-            count: GRID_CONSTANTS.HEIGHT
-        ),
-        count: GRID_CONSTANTS.DEPTH
-    )
+    var opponentGridState = CellState.freshGrid()
     var opponentShipLayout = [ShipAsset](
         repeating: ShipAsset(),
         count: GRID_CONSTANTS.MAX_NUMBER_OF_SHIPS
@@ -77,7 +66,7 @@ struct GridAsset {
         ⊞ Grid Info:
           • X-Axis Length:  \(xAxisLength)
           • Y-Axis Length:  \(yAxisLength)
-          • Z-Axis Length:  \(xAxisLength)
+          • Z-Axis Length:  \(zAxisLength)
           • My Grid:        \(myGridState)
           • My Ships:       \(myShipLayout)
           • Opponent Grid:  \(opponentGridState)
