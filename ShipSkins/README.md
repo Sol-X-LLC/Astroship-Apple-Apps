@@ -36,8 +36,11 @@ in each sprite. Numbering is by size rank on the sheet, not by GameState ship
 length — the mapping to the 7 ship footprints is still TBD.
 
 To use in Xcode: drag a sheet into Assets.xcassets as an image set, or
-reference the PNGs as bundle resources. The project uses a synchronized folder
-group, so files under Astroship-Apple-Apps/ are picked up automatically.
+reference the PNGs as bundle resources. Note the skins live at the repo root
+in ShipSkins/, outside the app folder — drag them into the Xcode project (or
+move them under Astroship-Apple-Apps/) to bundle them. Files under
+Astroship-Apple-Apps/ are picked up automatically by the project's
+synchronized folder group.
 
 Note: the $8 Kickstarter tier (2-player Game + Rocket Skin Package) is the
 natural home for a backer-exclusive skin. The backer rocket skin itself is a
