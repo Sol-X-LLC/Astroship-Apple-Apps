@@ -47,7 +47,18 @@ struct ShipAsset {
     var skin = SHIP_CONSTANTS.SKIN[0]
     
     // Future Work: 3D Grid
-    var gridLocation = [Grid.GRID_CONSTANTS.NOT_A_NUMBER][Grid.GRID_CONSTANTS.MIN_VALUE][Grid.GRID_CONSTANTS.ONLY_2D]
+    // Phase 0 fix: the old line referenced a `Grid` type that does
+    // not exist (`GridAsset` is the struct; `GRID_CONSTANTS` is a
+    // top-level enum) and a `MIN_VALUE` that was never defined.
+    // A ship's location is a plain [x, y, z] triple of Ints.
+    // x = NOT_A_NUMBER (-1) means the ship is not placed yet;
+    // z = ONLY_2D (0) is the 2D plane. Phase 1 replaces this
+    // triple with a GridPoint value type, per the architecture doc.
+    var gridLocation = [
+        GRID_CONSTANTS.NOT_A_NUMBER,
+        GRID_CONSTANTS.MIN_VALUE,
+        GRID_CONSTANTS.ONLY_2D
+    ]
     
     var description: String {
         """
