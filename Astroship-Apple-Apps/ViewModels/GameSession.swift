@@ -25,6 +25,7 @@
 //  Those belong in GameState (Phase 1), which will consume
 //  the validated AstroshipMessage values this file produces.
 
+import Combine
 import Foundation
 import GameKit
 import SwiftUI
