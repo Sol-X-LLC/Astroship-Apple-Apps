@@ -29,6 +29,10 @@ final class GameCenterSDK: ObservableObject {
     static let shared = GameCenterSDK()
 
     @Published private(set) var isAuthenticated = false
+    /// Set once GameKit's authenticate handler has fired with a result.
+    /// The lobby shows "Try again" only after an attempt has resolved,
+    /// never while the first connection is still in flight.
+    @Published private(set) var authenticationAttempted = false
     @Published private(set) var playerName: String?
     @Published private(set) var playerID: String?
     @Published private(set) var statusMessage = "Game Center has not started."
@@ -50,6 +54,7 @@ final class GameCenterSDK: ObservableObject {
             // GameKit owns the callback queue; publish SwiftUI state on main.
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
+                self.authenticationAttempted = true
                 self.errorMessage = error?.localizedDescription
                 self.refreshPlayer()
 
@@ -68,6 +73,18 @@ final class GameCenterSDK: ObservableObject {
                 }
             }
         }
+    }
+
+    /// Retry authentication after a failure. authenticate() runs once by
+    /// design (hasStarted guard); this resets the guard so the lobby's
+    /// "Try again" button can re-run it without relaunching the app.
+    /// Re-setting GKLocalPlayer's authenticateHandler is the supported
+    /// way to re-trigger it; GameKit calls the handler again with the
+    /// current sign-in state.
+    func retryAuthentication() {
+        hasStarted = false
+        authenticationAttempted = false
+        authenticate()
     }
 
     private func refreshPlayer() {
