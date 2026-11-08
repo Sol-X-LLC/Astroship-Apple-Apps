@@ -101,16 +101,16 @@ final class GameCenterSDK: ObservableObject {
     /// Anything else falls through to the raw message.
     private func friendlyAuthMessage(for error: Error?) -> String {
         guard let error else {
-            return "Game Center is unavailable or you are signed out. Sign in under Settings > Game Center, then tap Try again."
+            return "Game Center is unavailable or you are signed out. Tap Try again and sign in with a sandbox tester account when the Game Center prompt appears."
         }
         if let gkError = error as? GKError {
             switch gkError.code {
             case .cancelled:
-                return "Game Center sign-in was canceled or is turned off. Turn on Game Center in Settings, then tap Try again."
+                return "Game Center sign-in was canceled. Tap Try again and sign in with a sandbox tester account when the Game Center prompt appears."
             case .communicationsFailure:
                 return "Couldn't reach Game Center. Check your connection, then tap Try again."
             case .notAuthenticated:
-                return "You're not signed in to Game Center. Sign in under Settings > Game Center, then tap Try again."
+                return "You're not signed in to Game Center. Tap Try again and sign in with a sandbox tester account when the Game Center prompt appears."
             default:
                 break
             }
