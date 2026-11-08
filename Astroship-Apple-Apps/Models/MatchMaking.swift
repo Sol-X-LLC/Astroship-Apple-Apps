@@ -197,9 +197,6 @@ struct MatchMakingView: View {
                 Button("Find Opponent") { matchmaking.findOpponent() }
                     .disabled(!gameCenter.isAuthenticated || matchmaking.presentation != nil)
             }
-            if !gameCenter.isAuthenticated {
-                Text(gameCenter.statusMessage).font(.caption)
-            }
         }
         .padding()
         .sheet(item: $matchmaking.presentation, onDismiss: {
