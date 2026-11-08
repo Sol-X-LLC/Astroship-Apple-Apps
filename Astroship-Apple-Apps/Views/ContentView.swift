@@ -29,6 +29,11 @@ struct ContentView: View {
                     .font(.subheadline)
                     .multilineTextAlignment(.center)
 
+                if !gameCenter.isAuthenticated && gameCenter.authenticationAttempted {
+                    Button("Try again") { gameCenter.retryAuthentication() }
+                        .buttonStyle(.bordered)
+                }
+
                 MatchMakingView()
 
                 if matchmaking.isReady {
