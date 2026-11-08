@@ -40,6 +40,10 @@ final class GameCenterSDK: ObservableObject {
     @Published fileprivate var signInPresentation: SignInPresentation?
 
     private var hasStarted = false
+    /// The error from the most recent auth attempt, if any. Kept so
+    /// signInDismissed() can show the same friendly message the handler
+    /// showed, instead of falling back to the raw error text.
+    private var lastAuthError: Error?
 
     private init() {}
 
@@ -56,6 +60,7 @@ final class GameCenterSDK: ObservableObject {
                 guard let self else { return }
                 self.authenticationAttempted = true
                 self.errorMessage = error?.localizedDescription
+                self.lastAuthError = error
                 self.refreshPlayer()
 
                 if let controller {
@@ -68,8 +73,7 @@ final class GameCenterSDK: ObservableObject {
                 if self.isAuthenticated {
                     self.statusMessage = "Connected to Game Center."
                 } else {
-                    self.statusMessage = error?.localizedDescription
-                        ?? "Game Center is unavailable or you are signed out. You can still play locally."
+                    self.statusMessage = self.friendlyAuthMessage(for: error)
                 }
             }
         }
@@ -87,6 +91,33 @@ final class GameCenterSDK: ObservableObject {
         authenticate()
     }
 
+    /// Turns a GameKit auth error into something the player can act on.
+    /// The raw NSError text ("local player has not been authenticated")
+    /// says what happened but not what to do about it.
+    /// - Code 2, cancelled: the sign-in prompt was dismissed, or Game
+    ///   Center is turned off on the device.
+    /// - Code 3, communications failure: Game Center could not be reached.
+    /// - Code 6, not authenticated: no Apple ID is signed in to Game Center.
+    /// Anything else falls through to the raw message.
+    private func friendlyAuthMessage(for error: Error?) -> String {
+        guard let error else {
+            return "Game Center is unavailable or you are signed out. Sign in under Settings > Game Center, then tap Try again."
+        }
+        if let gkError = error as? GKError {
+            switch gkError.code {
+            case .cancelled:
+                return "Game Center sign-in was canceled or is turned off. Turn on Game Center in Settings, then tap Try again."
+            case .communicationsFailure:
+                return "Couldn't reach Game Center. Check your connection, then tap Try again."
+            case .notAuthenticated:
+                return "You're not signed in to Game Center. Sign in under Settings > Game Center, then tap Try again."
+            default:
+                break
+            }
+        }
+        return error.localizedDescription
+    }
+
     private func refreshPlayer() {
         let player = GKLocalPlayer.local
         isAuthenticated = player.isAuthenticated
@@ -98,7 +129,7 @@ final class GameCenterSDK: ObservableObject {
         refreshPlayer()
         statusMessage = isAuthenticated
             ? "Connected to Game Center."
-            : errorMessage ?? "Not connected. Sign in through Settings > Game Center, then reopen the game."
+            : friendlyAuthMessage(for: lastAuthError)
     }
 }
 
