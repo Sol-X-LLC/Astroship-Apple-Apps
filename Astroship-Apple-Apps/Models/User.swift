@@ -1,7 +1,8 @@
 //  User.swift
+//  For use with the Astroship product line of Sol-X LLC
 //
 //  Created by Blaze Sanders on 2026-10-28
-//  For support email dev@astroship.store at Sol-X LLC
+//  For support email dev@astroship.store
 
 // Standard libraries
 import SwiftData                // Instead of "import Foundation", "SQLite" or "GRDB" (feature-rich SQLite toolkit in Swift)
