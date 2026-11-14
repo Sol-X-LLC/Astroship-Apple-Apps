@@ -9,9 +9,9 @@
 //  can swap them and a future Foundation Model AI (SOFT-004) drops
 //  in without touching the rest of the app:
 //
-//  - DumbScanAI   — fires at random. The simplest opponent, for
+//  - DumbScanAI, fires at random. The simplest opponent, for
 //                   SOFT-002 / SOFT-008 and for debugging.
-//  - CrissCrossAI — the default v2026.0 opponent (SOFT-007).
+//  - CrissCrossAI, the default v2026.0 opponent (SOFT-007).
 //                   Hunts on a 3D checkerboard, and on a hit works
 //                   outward until the ship sinks, then hunts again.
 //
@@ -24,8 +24,8 @@
 //    reading them reveals nothing new). A `.ship` cell that has not
 //    been hit is treated exactly like fog: unknown.
 //  * Same rules as a human (SOFT-011). Every cell this returns is a
-//    legal target for GameState.fire(at:) — in bounds and not yet
-//    fired at — so an AI shot goes through the same validation a
+//    legal target for GameState.fire(at:), in bounds and not yet
+//    fired at, so an AI shot goes through the same validation a
 //    human tap does.
 //  * Deterministic (SOFT-010). nextShot takes the random generator
 //    by reference. Given the same GameState and the same seed it
@@ -131,7 +131,7 @@ struct CrissCrossAI: GameAI {
 
         // Fair knowledge only. Cells of ships the game has reported
         // sunk are all hits already, so reading them reveals nothing.
-        // Ships that are NOT sunk are never read — that would be the
+        // Ships that are NOT sunk are never read, that would be the
         // cheat SOFT-012 forbids.
         let ships = side.ships(in: state)
         let sunkCells = Set(ships.filter(\.isSunk).flatMap(\.cells))
@@ -227,16 +227,16 @@ struct CrissCrossAI: GameAI {
         let pool = checker.isEmpty ? openCells : checker
 
         if skillLevel >= 8 {
-            let scored = pool.map { ($0, openness(of: $0, in: grid)) }
-            let best = scored.map(\.1).max() ?? 0
-            let openest = scored.filter { $0.1 == best }.map(\.0)
+            let scored = pool.map { (cell: $0, openness: openness(of: $0, in: grid)) }
+            let best = scored.map { $0.openness }.max() ?? 0
+            let openest = scored.filter { $0.openness == best }.map { $0.cell }
             return openest[Int.random(in: 0..<openest.count, using: &rng)]
         }
         return pool[Int.random(in: 0..<pool.count, using: &rng)]
     }
 
     /// How many of a cell's neighbours are still unknown. A proxy for
-    /// "open water" — never reads ship positions, only resolved state.
+    /// "open water", never reads ship positions, only resolved state.
     private func openness(of point: GridPoint, in grid: [[[CellState]]]) -> Int {
         point.neighbours6.filter { isUnresolved($0, in: grid) }.count
     }

@@ -21,7 +21,7 @@ final class GameAITests: XCTestCase {
 
     /// Plays a full solo game between two AIs from a fixed seed, so
     /// the whole match is reproducible. Returns the winner and how
-    /// many shots were fired. Throws if any move is illegal — which
+    /// many shots were fired. Throws if any move is illegal, which
     /// is itself the legality + fair-play assertion, because the AI
     /// must only ever return cells GameState.fire accepts.
     private func playSoloGame<A: GameAI, B: GameAI>(
