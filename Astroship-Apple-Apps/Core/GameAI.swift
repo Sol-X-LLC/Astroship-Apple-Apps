@@ -1,57 +1,70 @@
 //  GameAI.swift
-//  For use with the Astroship product line of Sol-X LLC
+//  The computer opponents for solo play.
 //
-//  Created by Blaze Sanders on 2026-10-31
-//  AI opponents filled in for issue #4 (SOFT-007).
-//  For support email dev@astroship.store
+//  ------------------------------------------------
+//  WHAT THIS FILE DOES
+//  ------------------------------------------------
+//  Two computer opponents:
+//    - DumbScanAI    fires at random   (SOFT-008)
+//    - CrissCrossAI  the smart one      (SOFT-007)
 //
-//  Two solo opponents, both behind one protocol so a view model
-//  can swap them and a future Foundation Model AI (SOFT-004) drops
-//  in without touching the rest of the app:
+//  Requirements doc:
+//  https://github.com/Sol-X-LLC/Astroship-Product-Requirements-Document
 //
-//  - DumbScanAI, fires at random. The simplest opponent, for
-//                   SOFT-002 / SOFT-008 and for debugging.
-//  - CrissCrossAI, the default v2026.0 opponent (SOFT-007).
-//                   Hunts on a 3D checkerboard, and on a hit works
-//                   outward until the ship sinks, then hunts again.
+//  ------------------------------------------------
+//  IT IS "PURE" SWIFT
+//  ------------------------------------------------
+//  It imports only Foundation.
+//  No screen. No network. No database.
 //
-//  Rules kept, from the PRD and the architecture doc:
-//  * Fair play (SOFT-012). The AI is handed the whole GameState,
-//    including the cells of ships it has not found. It must never
-//    read them. Here it only ever looks at cells the game has
-//    already revealed: hits, misses, and the cells of ships the
-//    game itself has reported sunk (which are all hits already, so
-//    reading them reveals nothing new). A `.ship` cell that has not
-//    been hit is treated exactly like fog: unknown.
-//  * Same rules as a human (SOFT-011). Every cell this returns is a
-//    legal target for GameState.fire(at:), in bounds and not yet
-//    fired at, so an AI shot goes through the same validation a
-//    human tap does.
-//  * Deterministic (SOFT-010). nextShot takes the random generator
-//    by reference. Given the same GameState and the same seed it
-//    always returns the same cell, so solo matches replay exactly
-//    in tests. SeededGenerator below is that reproducible source.
-//  * Radar-safe (SOFT-024). `.radar` and `.empty` cells are already
-//    resolved, so they are never chosen.
+//  Why: keeping the game logic on its own
+//  makes it easy to test and easy to reuse.
 //
-//  Ships: the AI places straight-line ships only for now. The
-//  X / T / Y footprints are still undefined in code (see the open
-//  note in GameState.swift and Ship.swift), so AIFleet uses a
-//  documented placeholder fleet of straight ships, lengths 2...5.
-//  Swap in the real shapes once they are defined.
+//  ------------------------------------------------
+//  THE BOARD   (one cell = three numbers)
+//  ------------------------------------------------
+//    x = column    left to right     (0 up to WIDTH)
+//    y = row       top to bottom      (0 up to HEIGHT)
+//    z = layer     into the screen    (0 up to DEPTH)
+//
+//  - Origin (0, 0, 0) is the top-left of the front layer.
+//  - +z points away from you, into the screen.
+//  - x right, y down, z in  =  the right-hand rule.
+//    https://en.wikipedia.org/wiki/Right-hand_rule
+//
+//  (The board lives in Core/GridPoint, CellState, GameState.)
+//
+//  ------------------------------------------------
+//  FAIR PLAY   (SOFT-012, the important rule)
+//  ------------------------------------------------
+//  The AI is handed the WHOLE game.
+//  That includes where the human's ships are hidden.
+//
+//  The rule: it must NEVER look at a ship
+//  it has not already hit.
+//
+//  How we keep it honest:
+//  the AI only reads cells that are revealed
+//  (a hit or a miss). A hidden ship looks exactly
+//  like empty water to it, so it cannot cheat.
 
 import Foundation
 
-/// The skill level a solo opponent uses when none is chosen.
-/// 0 is debug (never shown to the player); 1 is the minimum the
-/// player sees; 10 plays its best (SOFT-009).
-let DEFAULT_AI_SKILL_LEVEL = 5
+// =====================================================================
+// Reproducible random numbers
+// =====================================================================
+//
+// What this piece is for:
+//   - Swift's built-in random cannot be given a "seed".
+//   - Without a seed, a test could never replay the same
+//     game twice.
+//   - SeededGenerator fixes that: the same seed always
+//     gives the same sequence of numbers (SOFT-010).
+//
+// About the strange numbers below:
+//   - They come from a well-known recipe (SplitMix64).
+//   - You do not need to understand them to use this.
 
-// MARK: - Deterministic randomness (SOFT-010)
-
-/// A small seeded random generator (SplitMix64). Swift's default
-/// generator cannot be seeded, so tests could not replay a match.
-/// This can: the same seed always yields the same sequence.
 struct SeededGenerator: RandomNumberGenerator {
     private var state: UInt64
 
@@ -60,7 +73,7 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 
     mutating func next() -> UInt64 {
-        state &+= 0x9E37_79B9_7F4A_7C15
+        state = state &+ 0x9E37_79B9_7F4A_7C15
         var z = state
         z = (z ^ (z >> 30)) &* 0xBF58_476D_1CE4_E5B9
         z = (z ^ (z >> 27)) &* 0x94D0_49BB_1331_11EB
@@ -68,325 +81,295 @@ struct SeededGenerator: RandomNumberGenerator {
     }
 }
 
-// MARK: - The AI interface
+// =====================================================================
+// The computer-opponent interface
+// =====================================================================
+//
+// Every AI has ONE job:
+//   look at the board, then hand back the next cell to fire at.
+//
+// We write that job as a "protocol" (an interface).
+// Think of it as a job description, not the worker itself.
+//
+// Why bother?
+//   - We can have several opponents:
+//       a simple one, a smart one, maybe an
+//       Apple-Intelligence one later.
+//   - The rest of the game uses whichever is plugged in,
+//     without caring which one it is.
+//   - Adding a new AI never means editing the old ones.
+//
+// This is the "program to an interface" rule of good design.
 
-/// A solo opponent. Given the board and which side it is firing at,
-/// it returns the one cell to fire at next. Pure: it changes nothing
-/// and reads only revealed information.
 protocol GameAI {
-    /// 0...10. Higher plays better. See SOFT-009.
-    var skillLevel: Int { get }
+    /// A short label, like "DumbScan" or "CrissCross".
+    var name: String { get }
 
-    /// The next cell to fire at.
-    /// - Parameters:
-    ///   - state: the current match. Only revealed cells are read.
-    ///   - side: the side being fired at (`.me` or `.opponent`),
-    ///     i.e. whose grid to shoot.
-    ///   - rng: the random source, by reference, for determinism.
-    /// - Returns: a legal, not-yet-fired-at cell on that grid.
-    func nextShot<R: RandomNumberGenerator>(
-        on state: GameState,
-        firingAt side: Side,
-        using rng: inout R
-    ) -> GridPoint
+    /// The next cell this AI fires at.
+    ///   game   = the current match
+    ///   side   = whose grid the AI is shooting at
+    ///   random = the seeded dice, so a game can replay
+    func nextShot(on game: GameState,
+                  firingAt side: Side,
+                  using random: inout SeededGenerator) -> GridPoint
 }
 
-// MARK: - DumbScanAI (SOFT-008)
+// =====================================================================
+// Helpers shared by every AI
+// =====================================================================
+// Small tools, used by both opponents below.
 
-/// Fires at a random cell the game has not resolved. No memory, no
-/// targeting. The easiest opponent and a baseline for tests.
+/// Which grid is the AI shooting at?
+///   firing at .opponent  -> the opponent's grid
+///   firing at .me        -> my grid
+private func grid(of game: GameState, _ side: Side) -> [[[CellState]]] {
+    side == .me ? game.myGrid : game.opponentGrid
+}
+
+/// The ships sitting on that grid.
+/// Used ONLY to see which ships are already sunk,
+/// never to find ships that are still hidden.
+private func ships(of game: GameState, _ side: Side) -> [PlacedShip] {
+    side == .me ? game.myShips : game.opponentShips
+}
+
+/// Every cell the AI is still allowed to fire at.
+///
+/// "Unknown" means a cell it has not resolved yet.
+/// Fog (blank water) and an un-hit ship both look the
+/// same to the AI, so a hidden ship gives it no secret.
+private func unknownCells(on grid: [[[CellState]]]) -> [GridPoint] {
+    var result: [GridPoint] = []
+    for z in 0 ..< GRID_CONSTANTS.DEPTH {
+        for y in 0 ..< GRID_CONSTANTS.HEIGHT {
+            for x in 0 ..< GRID_CONSTANTS.WIDTH {
+                let cell = grid[z][y][x]
+                if cell == .fog || cell == .ship {
+                    result.append(GridPoint(x: x, y: y, z: z))
+                }
+            }
+        }
+    }
+    return result
+}
+
+/// Is this one point on the board AND still unknown?
+/// (Safe to fire at.)
+private func isUnknown(_ point: GridPoint, on grid: [[[CellState]]]) -> Bool {
+    guard point.isInBounds else { return false }
+    let cell = grid[point.z][point.y][point.x]
+    return cell == .fog || cell == .ship
+}
+
+/// The six cells touching this one:
+///   left, right, up, down, and the layers in front and behind.
+/// Some may be off the board; callers filter those out.
+private func neighbours(of point: GridPoint) -> [GridPoint] {
+    [
+        GridPoint(x: point.x - 1, y: point.y,     z: point.z),
+        GridPoint(x: point.x + 1, y: point.y,     z: point.z),
+        GridPoint(x: point.x,     y: point.y - 1, z: point.z),
+        GridPoint(x: point.x,     y: point.y + 1, z: point.z),
+        GridPoint(x: point.x,     y: point.y,     z: point.z - 1),
+        GridPoint(x: point.x,     y: point.y,     z: point.z + 1),
+    ]
+}
+
+// =====================================================================
+// DumbScanAI  (SOFT-008): the simplest opponent
+// =====================================================================
+//
+// Fires at a random square it has not tried yet.
+// No memory. No strategy.
+//
+// It is the "easy" opponent, and the baseline the
+// tests measure the smart one against.
+
 struct DumbScanAI: GameAI {
-    var skillLevel: Int = 0
+    let name = "DumbScan"
 
-    func nextShot<R: RandomNumberGenerator>(
-        on state: GameState,
-        firingAt side: Side,
-        using rng: inout R
-    ) -> GridPoint {
-        let grid = side.grid(in: state)
-        let openCells = unresolvedCells(in: grid)
-        precondition(!openCells.isEmpty, "No cell left to fire at; the game should already be over.")
-        return openCells[Int.random(in: 0..<openCells.count, using: &rng)]
+    func nextShot(on game: GameState,
+                  firingAt side: Side,
+                  using random: inout SeededGenerator) -> GridPoint {
+
+        // 1. Get every square we are still allowed to fire at.
+        let choices = unknownCells(on: grid(of: game, side))
+
+        // 2. Pick one at random, and fire there.
+        //    (There is always at least one square left until the
+        //     game ends, so this is safe.)
+        return choices.randomElement(using: &random)!
     }
 }
 
-// MARK: - CrissCrossAI (SOFT-007), the default opponent
+// =====================================================================
+// CrissCrossAI  (SOFT-007): the default, smart opponent
+// =====================================================================
+//
+// It has two moods, checked in this order:
+//
+//   1. TARGET
+//      If a ship has been hit but not sunk yet,
+//      fire right next to that hit to finish it off.
+//
+//   2. HUNT
+//      Otherwise, search smartly.
+//      Every ship is at least two squares long, so it
+//      must sit on at least one "checkerboard" square
+//      (one where x + y + z is an even number).
+//      Firing only on those still finds every ship,
+//      using about half the shots.
 
-/// Hunts on a 3D checkerboard; on a hit, works outward from it until
-/// the ship sinks, then resumes hunting. `skillLevel` blends in some
-/// random shots at low levels and adds open-water aiming at high ones.
 struct CrissCrossAI: GameAI {
-    var skillLevel: Int
+    let name = "CrissCross"
 
-    init(skillLevel: Int = DEFAULT_AI_SKILL_LEVEL) {
-        self.skillLevel = skillLevel
+    func nextShot(on game: GameState,
+                  firingAt side: Side,
+                  using random: inout SeededGenerator) -> GridPoint {
+        let board = grid(of: game, side)
+
+        // Mood 1: finish a wounded ship, if there is one.
+        if let shot = targetNearAHit(on: board,
+                                     ships: ships(of: game, side),
+                                     using: &random) {
+            return shot
+        }
+
+        // Mood 2: otherwise, hunt on the checkerboard.
+        return hunt(on: board, using: &random)
     }
 
-    func nextShot<R: RandomNumberGenerator>(
-        on state: GameState,
-        firingAt side: Side,
-        using rng: inout R
-    ) -> GridPoint {
-        let grid = side.grid(in: state)
+    /// Looks for a hit on a ship that is NOT sunk yet,
+    /// then returns an unknown square next to it.
+    /// Returns nil when there is no wounded ship to chase.
+    private func targetNearAHit(on board: [[[CellState]]],
+                                ships: [PlacedShip],
+                                using random: inout SeededGenerator) -> GridPoint? {
 
-        // Fair knowledge only. Cells of ships the game has reported
-        // sunk are all hits already, so reading them reveals nothing.
-        // Ships that are NOT sunk are never read, that would be the
-        // cheat SOFT-012 forbids.
-        let ships = side.ships(in: state)
-        let sunkCells = Set(ships.filter(\.isSunk).flatMap(\.cells))
+        // Squares belonging to ships that are already sunk.
+        // We stop chasing those, so the AI goes back to
+        // hunting after it finishes a ship.
+        //   .filter  = keep only the ships that are sunk
+        //   .flatMap = join all their squares into one list
+        let sunkCells = Set(ships.filter { $0.isSunk }.flatMap { $0.cells })
 
-        var openCells: [GridPoint] = []
-        var activeHits: [GridPoint] = []
-        for z in 0..<GRID_CONSTANTS.DEPTH {
-            for y in 0..<GRID_CONSTANTS.HEIGHT {
-                for x in 0..<GRID_CONSTANTS.WIDTH {
+        // Walk the board. For every hit that is NOT part of a
+        // sunk ship, collect its still-unknown neighbours.
+        var candidates: [GridPoint] = []
+        for z in 0 ..< GRID_CONSTANTS.DEPTH {
+            for y in 0 ..< GRID_CONSTANTS.HEIGHT {
+                for x in 0 ..< GRID_CONSTANTS.WIDTH {
                     let point = GridPoint(x: x, y: y, z: z)
-                    switch grid[z][y][x] {
-                    case .fog, .ship:
-                        // Unknown to a fair AI: a hidden ship looks
-                        // just like open water.
-                        openCells.append(point)
-                    case .hit:
-                        if !sunkCells.contains(point) { activeHits.append(point) }
-                    case .miss, .radar, .empty:
-                        break // already resolved
+                    let isActiveHit = board[z][y][x] == .hit
+                                      && !sunkCells.contains(point)
+                    if isActiveHit {
+                        for next in neighbours(of: point) where isUnknown(next, on: board) {
+                            candidates.append(next)
+                        }
                     }
                 }
             }
         }
-        precondition(!openCells.isEmpty, "No cell left to fire at; the game should already be over.")
 
-        if shouldPlaySmart(using: &rng) {
-            // Target a wounded ship first, otherwise hunt.
-            if let shot = targetShot(near: activeHits, in: grid, using: &rng) {
-                return shot
-            }
-            return huntShot(among: openCells, in: grid, using: &rng)
-        }
-
-        // A deliberately careless shot, for lower skill levels.
-        return openCells[Int.random(in: 0..<openCells.count, using: &rng)]
+        // No candidates = no wounded ship. randomElement
+        // returns nil for an empty list, which is our signal.
+        return candidates.randomElement(using: &random)
     }
 
-    /// Whether to play the strategy this turn, or throw a careless
-    /// shot. Always smart at 10, never at 0, a `skill/10` chance between.
-    private func shouldPlaySmart<R: RandomNumberGenerator>(using rng: inout R) -> Bool {
-        if skillLevel >= 10 { return true }
-        if skillLevel <= 0 { return false }
-        return Double.random(in: 0..<1, using: &rng) < Double(skillLevel) / 10.0
-    }
-
-    /// Work outward from existing hits. Prefers extending a line of
-    /// two or more hits (how a straight ship lies), then any unshot
-    /// neighbour of a hit. Nil when there are no wounded ships.
-    private func targetShot<R: RandomNumberGenerator>(
-        near activeHits: [GridPoint],
-        in grid: [[[CellState]]],
-        using rng: inout R
-    ) -> GridPoint? {
-        guard !activeHits.isEmpty else { return nil }
-        let hitSet = Set(activeHits)
-
-        // Extend a run of hits along an axis.
-        var lineCandidates: [GridPoint] = []
-        for point in activeHits {
-            for axis in Axis.allCases {
-                let forward = point.step(axis, by: 1)
-                let backward = point.step(axis, by: -1)
-                if hitSet.contains(backward), isUnresolved(forward, in: grid) {
-                    lineCandidates.append(forward)
-                }
-                if hitSet.contains(forward), isUnresolved(backward, in: grid) {
-                    lineCandidates.append(backward)
-                }
-            }
-        }
-        if let pick = pickRandom(lineCandidates, using: &rng) { return pick }
-
-        // No line yet: any unshot neighbour of a hit.
-        var neighbourCandidates: [GridPoint] = []
-        for point in activeHits {
-            for neighbour in point.neighbours6 where isUnresolved(neighbour, in: grid) {
-                neighbourCandidates.append(neighbour)
-            }
-        }
-        return pickRandom(neighbourCandidates, using: &rng)
-    }
-
-    /// Pick a checkerboard cell to hunt. Every ship is at least two
-    /// cells long, so it must touch a cell where x+y+z is even;
-    /// hunting those halves the search. At skill 8+ it also aims at
-    /// the most open cell (the biggest patch of unknown water).
-    private func huntShot<R: RandomNumberGenerator>(
-        among openCells: [GridPoint],
-        in grid: [[[CellState]]],
-        using rng: inout R
-    ) -> GridPoint {
-        let checker = openCells.filter { ($0.x + $0.y + $0.z) % 2 == 0 }
-        let pool = checker.isEmpty ? openCells : checker
-
-        if skillLevel >= 8 {
-            let scored = pool.map { (cell: $0, openness: openness(of: $0, in: grid)) }
-            let best = scored.map { $0.openness }.max() ?? 0
-            let openest = scored.filter { $0.openness == best }.map { $0.cell }
-            return openest[Int.random(in: 0..<openest.count, using: &rng)]
-        }
-        return pool[Int.random(in: 0..<pool.count, using: &rng)]
-    }
-
-    /// How many of a cell's neighbours are still unknown. A proxy for
-    /// "open water", never reads ship positions, only resolved state.
-    private func openness(of point: GridPoint, in grid: [[[CellState]]]) -> Int {
-        point.neighbours6.filter { isUnresolved($0, in: grid) }.count
+    /// Fires on a checkerboard square (x + y + z is even).
+    /// If somehow none is left, falls back to any open square.
+    private func hunt(on board: [[[CellState]]],
+                      using random: inout SeededGenerator) -> GridPoint {
+        let unknown = unknownCells(on: board)
+        let checkerboard = unknown.filter { ($0.x + $0.y + $0.z) % 2 == 0 }
+        let pool = checkerboard.isEmpty ? unknown : checkerboard
+        return pool.randomElement(using: &random)!
     }
 }
 
-// MARK: - AI ship placement (straight ships only, for now)
+// =====================================================================
+// Placing the computer's fleet
+// =====================================================================
+//
+// Before the battle, the AI puts its ships down.
+//
+// For now every ship is a straight line. The bent
+// shapes (I / X / T / Y) are not defined in code yet,
+// so this is a clearly-marked placeholder.
+//
+// Seven ships, lengths 2 to 5.
 
-/// Places an AI fleet. Straight-line ships only until the X / T / Y
-/// footprints are defined in code. The fleet below is a placeholder:
-/// seven ships with lengths inside SHIP_CONSTANTS (2...5). The exact
-/// per-length counts are not set in the PRD yet.
 enum AIFleet {
-    /// Seven straight ships (GRID_CONSTANTS.MAX_NUMBER_OF_SHIPS),
-    /// lengths within SHIP_CONSTANTS.MIN/MAX_SHIP_LENGTH. Placeholder.
+
+    /// Seven straight ships. These lengths are a placeholder
+    /// until the real fleet is decided.
     static let straightLengths = [2, 2, 3, 3, 4, 4, 5]
 
+    /// Thrown if a ship somehow cannot be placed.
     enum PlacementError: Error {
         case couldNotPlace(length: Int)
     }
 
-    /// Places the whole fleet on one side's grid, retrying random
-    /// positions until each ship fits without overlap.
-    static func placeStraightFleet<R: RandomNumberGenerator>(
-        on state: inout GameState,
-        forOpponent: Bool,
-        using rng: inout R
-    ) throws {
+    /// Places the whole fleet on one side of the board.
+    static func placeStraightFleet(on game: inout GameState,
+                                   forOpponent: Bool,
+                                   using random: inout SeededGenerator) throws {
         for length in straightLengths {
-            try placeOne(length: length, on: &state, forOpponent: forOpponent, using: &rng)
+            try placeOneShip(length: length,
+                             on: &game,
+                             forOpponent: forOpponent,
+                             using: &random)
         }
     }
 
-    private static func placeOne<R: RandomNumberGenerator>(
-        length: Int,
-        on state: inout GameState,
-        forOpponent: Bool,
-        using rng: inout R,
-        maxAttempts: Int = 2000
-    ) throws {
-        for _ in 0..<maxAttempts {
-            let axis = Axis.allCases[Int.random(in: 0..<Axis.allCases.count, using: &rng)]
-            let span = axis.size
-            if length > span { continue } // a length-5 ship cannot lie along the 4-deep axis
+    /// Tries random spots until the ship fits with no overlap.
+    private static func placeOneShip(length: Int,
+                                     on game: inout GameState,
+                                     forOpponent: Bool,
+                                     using random: inout SeededGenerator) throws {
 
-            var x = Int.random(in: 0..<GRID_CONSTANTS.WIDTH, using: &rng)
-            var y = Int.random(in: 0..<GRID_CONSTANTS.HEIGHT, using: &rng)
-            var z = Int.random(in: 0..<GRID_CONSTANTS.DEPTH, using: &rng)
-            switch axis {
-            case .x: x = Int.random(in: 0...(GRID_CONSTANTS.WIDTH - length), using: &rng)
-            case .y: y = Int.random(in: 0...(GRID_CONSTANTS.HEIGHT - length), using: &rng)
-            case .z: z = Int.random(in: 0...(GRID_CONSTANTS.DEPTH - length), using: &rng)
+        // axis 0 = lie along x,  1 = along y,  2 = along z.
+        for _ in 0 ..< 1000 {
+            let axis = Int.random(in: 0 ... 2, using: &random)
+
+            // The last start position where the ship still fits
+            // on the board along its chosen direction.
+            let maxX = axis == 0 ? GRID_CONSTANTS.WIDTH  - length : GRID_CONSTANTS.WIDTH  - 1
+            let maxY = axis == 1 ? GRID_CONSTANTS.HEIGHT - length : GRID_CONSTANTS.HEIGHT - 1
+            let maxZ = axis == 2 ? GRID_CONSTANTS.DEPTH  - length : GRID_CONSTANTS.DEPTH  - 1
+
+            // Too long for this direction? Try another.
+            if maxX < 0 || maxY < 0 || maxZ < 0 { continue }
+
+            // Pick a random starting square.
+            let startX = Int.random(in: 0 ... maxX, using: &random)
+            let startY = Int.random(in: 0 ... maxY, using: &random)
+            let startZ = Int.random(in: 0 ... maxZ, using: &random)
+
+            // Lay the ship out, one square per step, along the axis.
+            var cells: [GridPoint] = []
+            for step in 0 ..< length {
+                cells.append(GridPoint(x: startX + (axis == 0 ? step : 0),
+                                       y: startY + (axis == 1 ? step : 0),
+                                       z: startZ + (axis == 2 ? step : 0)))
             }
-
-            let origin = GridPoint(x: x, y: y, z: z)
-            let cells = (0..<length).map { origin.step(axis, by: $0) }
 
             var ship = ShipAsset()
             ship.length = length
-            ship.shape = "I" // straight
+            ship.shape = "I"   // a straight line
 
+            // GameState rejects an overlap by throwing.
+            // If it does, just try another random spot.
             do {
-                try state.placeShip(ship, at: cells, forOpponent: forOpponent)
+                try game.placeShip(ship, at: cells, forOpponent: forOpponent)
                 return
             } catch {
-                continue // overlap or out of bounds: try another spot
+                continue
             }
         }
+
+        // 1000 tries all failed. On a near-empty board this
+        // never happens, so reaching here means something is wrong.
         throw PlacementError.couldNotPlace(length: length)
-    }
-}
-
-// MARK: - Small shared helpers
-
-/// The three board axes, for stepping and neighbours.
-private enum Axis: CaseIterable {
-    case x, y, z
-
-    /// The board's size along this axis.
-    var size: Int {
-        switch self {
-        case .x: GRID_CONSTANTS.WIDTH
-        case .y: GRID_CONSTANTS.HEIGHT
-        case .z: GRID_CONSTANTS.DEPTH
-        }
-    }
-}
-
-private extension GridPoint {
-    /// This point moved `distance` cells along `axis`.
-    func step(_ axis: Axis, by distance: Int) -> GridPoint {
-        switch axis {
-        case .x: GridPoint(x: x + distance, y: y, z: z)
-        case .y: GridPoint(x: x, y: y + distance, z: z)
-        case .z: GridPoint(x: x, y: y, z: z + distance)
-        }
-    }
-
-    /// The six face-adjacent cells (left/right, up/down, near/far).
-    /// Some may be off the board; callers filter with isUnresolved.
-    var neighbours6: [GridPoint] {
-        Axis.allCases.flatMap { [step($0, by: 1), step($0, by: -1)] }
-    }
-}
-
-/// Every cell a fair AI may still fire at on this grid: fog or an
-/// unhit ship, which look identical to it. Hit, miss, radar, and
-/// empty are already resolved.
-private func unresolvedCells(in grid: [[[CellState]]]) -> [GridPoint] {
-    var cells: [GridPoint] = []
-    for z in 0..<GRID_CONSTANTS.DEPTH {
-        for y in 0..<GRID_CONSTANTS.HEIGHT {
-            for x in 0..<GRID_CONSTANTS.WIDTH {
-                switch grid[z][y][x] {
-                case .fog, .ship: cells.append(GridPoint(x: x, y: y, z: z))
-                default: break
-                }
-            }
-        }
-    }
-    return cells
-}
-
-/// Whether `point` is on the board and not yet resolved.
-private func isUnresolved(_ point: GridPoint, in grid: [[[CellState]]]) -> Bool {
-    guard point.isInBounds else { return false }
-    switch grid[point.z][point.y][point.x] {
-    case .fog, .ship: return true
-    default: return false
-    }
-}
-
-private func pickRandom<R: RandomNumberGenerator>(
-    _ candidates: [GridPoint],
-    using rng: inout R
-) -> GridPoint? {
-    guard !candidates.isEmpty else { return nil }
-    return candidates[Int.random(in: 0..<candidates.count, using: &rng)]
-}
-
-// MARK: - Side helpers
-
-private extension Side {
-    /// The grid belonging to this side: the one you fire at when
-    /// firingAt this side.
-    func grid(in state: GameState) -> [[[CellState]]] {
-        self == .me ? state.myGrid : state.opponentGrid
-    }
-
-    /// The ships belonging to this side.
-    func ships(in state: GameState) -> [PlacedShip] {
-        self == .me ? state.myShips : state.opponentShips
     }
 }
