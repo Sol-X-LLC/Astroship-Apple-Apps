@@ -8,18 +8,55 @@
 //
 //  To revert: delete this file, and in MyApp.swift change the root
 //  view back to ContentView().gameCenterConnection().
+//
+//  One related option for the real game, from your own architecture: when unfolded, show both at once
+//  two panes side by side — an HStack(spacing: 0) with a starryPage in each half, no TabView. That's the
+//  "two-pane" layout your design calls for, and each pane keeps its 1.4:1 ratio.
+
+/**
+ 
+ Inner Display (Unfolded)
+
+ • Pixel Resolution: 1878-by-2670 pixels at 430 ppi (7.6-inch diagonal OLED)
+ • Logical Points (@3x scale factor): 626 × 890 points (or 951 × 669 points held sideways / 669 × 951 upright)
+ • Additional Specs: ProMotion 120Hz, Nano-texture finish, 1.41:1 aspect ratio
+
+ Outer Display (Folded)
+
+ • Pixel Resolution: 1398-by-2034 pixels at 460 ppi (5.4-inch diagonal OLED)
+ • Logical Points (@3x scale factor): 466 × 678 points
+ 
+ 
+ The Scale Factor (@1x, @2x, @3x)
+
+ The relationship between points and physical pixels is bridged by a scale factor (multiplier):
+ • @1x (Legacy): 1 point = 1 pixel (e.g., original iPhone).
+ • @2x (Retina): 1 point = 2 × 2 pixels (4 total pixels per point).
+ • @3x (Modern Retina): 1 point = 3 × 3 pixels (9 total pixels per point).
+ */
 
 import SwiftUI
 
-/// Swipe between the two starfields; each page carries the same 14x10 grid.
+
+/// Fold posture of the Duo. No public API reports this —
+/// feed it from your Duo detection layer, and flip it
+/// manually in the preview while testing.
+enum DuoPosture {
+    case flat    // fully open, or folded shut — one screen in use
+    case lShape  // half-folded like a laptop — both halves in use
+}
+
+
+/// Swipe between the two starfields in the Xcode "Assets" catalog
 struct StarryTestView: View {
+    /// Set by your Duo detection: true on the cover (outside) screen.
+    var isOutsideScreen: Bool = false
+
     var body: some View {
-        TabView {
-            starryPage(imageName: "StarryInside", label: "StarryInside")
-            starryPage(imageName: "StarryOutside", label: "StarryOutside")
-        }
-        .tabViewStyle(.page(indexDisplayMode: .automatic))
-        .ignoresSafeArea()
+        starryPage(
+            imageName: isOutsideScreen ? "StarryBackground" : "StarryBackground",
+            label: isOutsideScreen ? "Opponent Grid" : "My Grid"
+        )
     }
 
     private func starryPage(imageName: String, label: String) -> some View {
@@ -39,6 +76,7 @@ struct StarryTestView: View {
             }
             .padding()
         }
+        //.frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 }
 
@@ -59,10 +97,17 @@ private struct BoardGridView: View {
                     .aspectRatio(1, contentMode: .fit)
             }
         }
-        .padding(.horizontal, 12)
+        .aspectRatio(14.0 / 10.0, contentMode: .fit)
+        .padding(.horizontal, 46)
+        .padding(.vertical, 40)
+
     }
 }
 
-#Preview {
-    StarryTestView()
+#Preview("Inside screen") {
+    StarryTestView(isOutsideScreen: false)
+}
+
+#Preview("Outside screen") {
+    StarryTestView(isOutsideScreen: true)
 }
