@@ -4,6 +4,14 @@
 //  Created by Blaze Sanders on 2026-10-31
 //  For support email dev@astroship.store
 
+
+/** The Grid (one 3D cell is an array of three numbers)
+    - Origin (0, 0, 0) is the top-left of the front layer.
+    - x = column,   left to right           (0 up to Grid.WIDTH)
+    - y = row,          top to bottom      (0 up to Grid.HEIGHT)
+    - z = layer,        into the screen    (0 up toGrid. DEPTH)
+ */
+
 // Standard libraries
 import SwiftData                // TODO or "GRDB" (feature-rich SQLite toolkit in Swift)
 import Foundation
