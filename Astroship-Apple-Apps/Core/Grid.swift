@@ -4,25 +4,41 @@
 //  Created by Blaze Sanders on 2026-10-31
 //  For support email dev@astroship.store
 
-
-/** The Grid (one 3D cell is an array of three numbers)
-    - Origin (0, 0, 0) is the top-left of the front layer.
-    - x = column,   left to right           (0 up to Grid.WIDTH)
-    - y = row,          top to bottom      (0 up to Grid.HEIGHT)
-    - z = layer,        into the screen    (0 up toGrid. DEPTH)
- */
-
 // Standard libraries
 import SwiftData                // TODO or "GRDB" (feature-rich SQLite toolkit in Swift)
 import Foundation
 import DeveloperToolsSupport    // Used to define images in "GridAsset" struct
 import SwiftUI                  // Used to define SF Symbols in "GridAsset" struct
 
-// External libraries
+/** The Grid (one 3D cell is an array of three numbers)
+    - Origin (0, 0, 0) is the top-left as the player holds the iPhone.
+    - x = column,   left to right           (0 up to Grid.WIDTH)
+    - y = row,          top to bottom      (0 up to Grid.HEIGHT)
+    - z = layer,        into the screen    (0 up toGrid. DEPTH), defaults to 0 for 2D play on standard iPhones
+ */
+struct GridPoint: Hashable, Codable, Equatable, CustomStringConvertible {
+    var x: Int
+    var y: Int
+    var z: Int
 
-// enum namespace
+    init(x: Int, y: Int, z: Int = 0) {
+        self.x = x
+        self.y = y
+        self.z = z
+    }
+
+    /// True when the point is on the board in all three axes.
+    var isInBounds: Bool {
+        (0..<GRID_CONSTANTS.WIDTH).contains(x)
+            && (0..<GRID_CONSTANTS.HEIGHT).contains(y)
+            && (0..<GRID_CONSTANTS.DEPTH).contains(z)
+    }
+
+    var description: String { "(\(x), \(y), \(z))" }
+}
+
+/// Enum namespace for every grid, MoveCodec bound check, and UI layout
 enum GRID_CONSTANTS{
-    // Every grid, AI bound, MoveCodec bound check, and UI layout must read WIDTH / HEIGHT / DEPTH here
     static let WIDTH = 14               // The Duo screen is 1.4 to 1 when folded and unfoled
     static let HEIGHT = 10
     static let DEPTH = 4                // Four fold postions of the Duo worked best in play testing
@@ -48,13 +64,12 @@ struct GridAsset: Codable, Equatable {
     var yAxisLength = GRID_CONSTANTS.HEIGHT
     var zAxisLength = GRID_CONSTANTS.DEPTH
 
-    // Each grid state is a 3D array of CellState (Core/CellState.swift):
-    // fog, ship, hit, miss, radar, empty — distinguished by shape +
-    // label, never by colour alone (INTE-001). gridState[z][y][x] —
-    // z layer outermost, then row y, then column x — so a shot
-    // (x, y, z) reads gridState[z][y][x]. Each layout is one
-    // ShipAsset per ship (7). GameState (Core/GameState.swift)
-    // owns the rules that change these cells.
+    /** Each grid state is a 3D array of CellState (Core/CellState.swift):
+        - fog, ship, hit, miss, radar, empty — distinguished by shape + label, never by colour alone (INTE-001).
+        - gridState[z][y][x] — z layer outermost, then row y, then column x
+        - A shot (x, y, z) reads gridState[z][y][x].
+        - GameState (Core/GameState.swift) owns the rules that change these cells.
+    */
     var myGridState = CellState.freshGrid()
     
     // See Ship.swift for custom data type
