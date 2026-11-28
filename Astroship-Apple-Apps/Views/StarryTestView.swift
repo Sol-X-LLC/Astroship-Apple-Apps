@@ -14,7 +14,7 @@
 //  "two-pane" layout your design calls for, and each pane keeps its 1.4:1 ratio.
 
 /**
- 
+
  Inner Display (Unfolded)
 
  • Pixel Resolution: 1878-by-2670 pixels at 430 ppi (7.6-inch diagonal OLED)
@@ -82,25 +82,56 @@ struct StarryTestView: View {
 
 /// Plain 14 columns x 10 rows visual grid. No rules, no state,
 /// no tap handling — delete with StarryTestView.
+///
+/// Sizing is explicit, not negotiated: a GeometryReader measures
+/// the real safe area on this screen (inner or outer Duo screen,
+/// either orientation) and the cell is the largest square that
+/// fits 14 columns by 10 rows inside it. Nothing here relies on
+/// `.aspectRatio(.fit)` — a LazyVGrid with `.flexible()` columns
+/// has no ideal size to scale from, so the fit never shrank it
+/// and the grid overflowed the safe area on the narrower screen.
 private struct BoardGridView: View {
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 14)
+    private let columns = 14
+    private let rows = 10
+    private let spacing: CGFloat = 2
+    /// Clear space kept around the grid inside the safe area.
+    private let margin: CGFloat = 16
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(0..<140, id: \.self) { _ in
-                RoundedRectangle(cornerRadius: 2)
-                    .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                    .background(
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color.white.opacity(0.08))
-                    )
-                    .aspectRatio(1, contentMode: .fit)
-            }
-        }
-        .aspectRatio(14.0 / 10.0, contentMode: .fit)
-        .padding(.horizontal, 46)
-        .padding(.vertical, 40)
+        GeometryReader { proxy in
+            let insets = proxy.safeAreaInsets
+            let availW = proxy.size.width - insets.leading - insets.trailing - margin * 2
+            let availH = proxy.size.height - insets.top - insets.bottom - margin * 2
+            let cell = max(
+                1,
+                floor(min(
+                    (availW - CGFloat(columns - 1) * spacing) / CGFloat(columns),
+                    (availH - CGFloat(rows - 1) * spacing) / CGFloat(rows)
+                ))
+            )
+            let gridW = cell * CGFloat(columns) + CGFloat(columns - 1) * spacing
+            let gridH = cell * CGFloat(rows) + CGFloat(rows - 1) * spacing
 
+            LazyVGrid(
+                columns: Array(repeating: GridItem(.fixed(cell), spacing: spacing), count: columns),
+                spacing: spacing
+            ) {
+                ForEach(0..<columns * rows, id: \.self) { _ in
+                    RoundedRectangle(cornerRadius: 2)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 1)
+                        .background(
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.white.opacity(0.08))
+                        )
+                        .frame(width: cell, height: cell)
+                }
+            }
+            .frame(width: gridW, height: gridH)
+            .position(
+                x: insets.leading + margin + availW / 2,
+                y: insets.top + margin + availH / 2
+            )
+        }
     }
 }
 
